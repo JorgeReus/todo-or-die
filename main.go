@@ -49,7 +49,7 @@ func main() {
 	kingpin.Parse()
 
 	expr := &Config{}
-	file, err := os.Open("./example")
+	file, err := os.Open("./example_2")
 	kingpin.FatalIfError(err, "")
 	err = parser.Parse("", file, expr)
 	kingpin.FatalIfError(err, "")
