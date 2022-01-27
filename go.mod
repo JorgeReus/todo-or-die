@@ -5,6 +5,8 @@ go 1.17
 require (
 	github.com/alecthomas/participle/v2 v2.0.0-alpha7.0.20211230012102-cd959ef67ad7
 	github.com/alecthomas/repr v0.0.0-20220113201626-b1b626ac65ae
+	github.com/deckarep/golang-set v1.8.0
+	github.com/iafan/cwalk v0.0.0-20210125030640-586a8832a711
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )
 

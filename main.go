@@ -2,14 +2,18 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/alecthomas/repr"
+	"github.com/iafan/cwalk"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
+	mapset "github.com/deckarep/golang-set"
 )
 
 type Value struct {
@@ -42,17 +46,46 @@ var tomlLexer = lexer.MustSimple([]lexer.SimpleRule{
 })
 
 var parser = participle.MustBuild(&Config{}, participle.Lexer(
-
 	tomlLexer), participle.Unquote())
+
+var ignoredDirs = mapset.NewSet()
+var ignoredFiles = mapset.NewSet()
+
+func walkFunc(path string, info os.FileInfo, err error) error {
+	if info.IsDir() {
+		if ignoredDirs.Contains(info.Name()) {
+			return filepath.SkipDir
+		}
+	} else {
+		if ignoredFiles.Contains(info.Name()) {
+			return nil
+		}
+	}
+
+	fmt.Println(path)
+	return nil
+}
 
 func main() {
 	kingpin.Parse()
+
+	ignoredDirs.Add(".terraform")
+	ignoredDirs.Add(".git")
+
+	ignoredFiles.Add(".terraform.lock.hcl")
+	ignoredFiles.Add(".gitignore")
 
 	expr := &Config{}
 	file, err := os.Open("./example")
 	kingpin.FatalIfError(err, "")
 	err = parser.Parse("", file, expr)
 	kingpin.FatalIfError(err, "")
+
+	err = cwalk.Walk("/home/reus/CENEVAL", walkFunc)
+
+	if err != nil {
+		panic(err)
+	}
 
 	repr.Println(expr)
 }
