@@ -2,9 +2,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
@@ -50,27 +54,50 @@ var parser = participle.MustBuild(&Config{}, participle.Lexer(
 
 var ignoredDirs = mapset.NewSet()
 var ignoredFiles = mapset.NewSet()
+var regex = regexp.MustCompile(`TODO[\w\s]*`)
 
-func walkFunc(path string, info os.FileInfo, err error) error {
-	if info.IsDir() {
-		if ignoredDirs.Contains(info.Name()) {
+func walkFunc(path string, d os.FileInfo, err error) error {
+	// func walkFunc(path string, d fs.DirEntry, err error) error {
+	if d.IsDir() {
+		if ignoredDirs.Contains(d.Name()) {
 			return filepath.SkipDir
 		}
 	} else {
-		if ignoredFiles.Contains(info.Name()) {
+		if ignoredFiles.Contains(d.Name()) {
 			return nil
+		}
+
+		// file, err := os.Open(path)
+		file, err := os.Open(filepath.Join(baseDir, path))
+		defer file.Close()
+		if err != nil {
+			return errors.New(fmt.Sprintf("Error in file %s: %s", path, err))
+		}
+
+		b, err := ioutil.ReadAll(file)
+		if err != nil {
+			return errors.New(fmt.Sprintf("Error in file %s: %s", path, err))
+		}
+		matches := regex.FindAllString(string(b), -1)
+		if len(matches) > 0 {
+			fmt.Println("Found match in " + filepath.Join(baseDir, path))
+			for _, match := range matches {
+				fmt.Println(match)
+			}
 		}
 	}
 
-	fmt.Println(path)
 	return nil
 }
+
+var baseDir = "/home/reus/CENEVAL"
 
 func main() {
 	kingpin.Parse()
 
 	ignoredDirs.Add(".terraform")
 	ignoredDirs.Add(".git")
+	ignoredDirs.Add("node_modules")
 
 	ignoredFiles.Add(".terraform.lock.hcl")
 	ignoredFiles.Add(".gitignore")
@@ -81,10 +108,11 @@ func main() {
 	err = parser.Parse("", file, expr)
 	kingpin.FatalIfError(err, "")
 
-	err = cwalk.Walk("/home/reus/CENEVAL", walkFunc)
+	err = cwalk.Walk(baseDir, walkFunc)
+	// err = filepath.WalkDir(baseDir, walkFunc)
 
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
 	repr.Println(expr)

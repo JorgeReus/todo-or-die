@@ -13,4 +13,5 @@ require (
 require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
+	github.com/vertoforce/streamregex v0.0.0-20200126210557-5b6afd4f6723 // indirect
 )
