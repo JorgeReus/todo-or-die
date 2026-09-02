@@ -1,0 +1,10 @@
+[package]
+name="todo-or-die-cli"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+todo-or-die-core={path="../todo-or-die-core"}
+todo-or-die-tree-sitter={path="../todo-or-die-tree-sitter"}
+clap.workspace=true
+ignore.workspace=true
+serde_json.workspace=true

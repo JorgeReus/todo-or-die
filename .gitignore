@@ -1,0 +1,16 @@
+# Rust build output
+/target/
+
+# direnv / local Nix shell state
+/.direnv/
+.direnv/
+
+# macOS
+.DS_Store
+
+# Local editor and environment files
+.env
+.env.local
+.idea/
+.vscode/
+*.swp
