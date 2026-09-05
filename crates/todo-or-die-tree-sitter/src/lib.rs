@@ -4,6 +4,8 @@ use todo_or_die_core::{SourceComment, SourceSpan};
 enum CommentProfile {
     CLike,
     PythonLike,
+    Html,
+    Svelte,
 }
 
 #[derive(Clone, Copy)]
@@ -15,6 +17,8 @@ enum CommentKind {
 fn syntax(path: &std::path::Path) -> Option<CommentProfile> {
     match path.extension()?.to_str()? {
         "py" => Some(CommentProfile::PythonLike),
+        "html" | "htm" => Some(CommentProfile::Html),
+        "svelte" => Some(CommentProfile::Svelte),
         "rs" | "ts" | "tsx" | "js" | "jsx" | "go" | "java" | "kt" | "kts" | "zig" => {
             Some(CommentProfile::CLike)
         }
@@ -47,10 +51,19 @@ fn normalize(raw: &str, profile: CommentProfile, kind: CommentKind) -> String {
     let prefix = match profile {
         CommentProfile::CLike => "//",
         CommentProfile::PythonLike => "#",
+        CommentProfile::Html | CommentProfile::Svelte => "<!--",
     };
     let body = match kind {
         CommentKind::Line => raw.trim().trim_start_matches(prefix),
-        CommentKind::Block => raw.trim().trim_start_matches("/*").trim_end_matches("*/"),
+        CommentKind::Block => {
+            let (open, close) = if matches!(profile, CommentProfile::Html | CommentProfile::Svelte)
+            {
+                ("<!--", "-->")
+            } else {
+                ("/*", "*/")
+            };
+            raw.trim().trim_start_matches(open).trim_end_matches(close)
+        }
     };
     body.lines()
         .map(|line| {
@@ -77,7 +90,7 @@ pub fn extract_comments(
     let mut i = 0;
     let mut line_start = true;
     while i < bytes.len() {
-        if matches!(syntax, CommentProfile::CLike)
+        if matches!(syntax, CommentProfile::CLike | CommentProfile::Svelte)
             && i + 1 < bytes.len()
             && bytes[i..i + 2] == *b"\\\\"
         {
@@ -87,7 +100,7 @@ pub fn extract_comments(
             }
             continue;
         }
-        if syntax == CommentProfile::CLike
+        if matches!(syntax, CommentProfile::CLike | CommentProfile::Svelte)
             && i + 1 < bytes.len()
             && bytes[i] == b'/'
             && bytes[i + 1] == b'/'
@@ -106,7 +119,7 @@ pub fn extract_comments(
             line_start = false;
             continue;
         }
-        if syntax == CommentProfile::CLike
+        if matches!(syntax, CommentProfile::CLike | CommentProfile::Svelte)
             && i + 1 < bytes.len()
             && bytes[i] == b'/'
             && bytes[i + 1] == b'*'
@@ -117,6 +130,25 @@ pub fn extract_comments(
                 i += 1;
             }
             i = (i + 2).min(bytes.len());
+            let raw = source[start..i].to_owned();
+            comments.push(SourceComment {
+                content: normalize(&raw, syntax, CommentKind::Block),
+                raw_text: raw,
+                span: span(source, start, i),
+            });
+            line_start = false;
+            continue;
+        }
+        if matches!(syntax, CommentProfile::Html | CommentProfile::Svelte)
+            && i + 3 < bytes.len()
+            && &bytes[i..i + 4] == b"<!--"
+        {
+            let start = i;
+            i += 4;
+            while i + 2 < bytes.len() && &bytes[i..i + 3] != b"-->" {
+                i += 1;
+            }
+            i = (i + 3).min(bytes.len());
             let raw = source[start..i].to_owned();
             comments.push(SourceComment {
                 content: normalize(&raw, syntax, CommentKind::Block),
