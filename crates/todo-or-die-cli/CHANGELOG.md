@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/JorgeReus/todo-or-die/compare/v0.1.0...v0.1.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **providers:** report configuration errors correctly ([4465e4c](https://github.com/JorgeReus/todo-or-die/commit/4465e4c7cb97875dcd7e94448dadc4277110dcc3))
+
 ## 0.1.0 (2026-09-05)
 
 

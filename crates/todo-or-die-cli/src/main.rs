@@ -175,6 +175,7 @@ async fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    todo_or_die_providers::install_tls_provider();
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(settings.network.timeout_seconds))
         .build()

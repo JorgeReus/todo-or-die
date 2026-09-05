@@ -6,7 +6,7 @@ pub mod issues;
 pub mod packages;
 pub mod releases;
 
-fn install_tls_provider() {
+pub fn install_tls_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
