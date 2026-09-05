@@ -1,6 +1,6 @@
 [package]
 name="todo-or-die-cli"
-version.workspace=true
+version="0.1.0"
 edition.workspace=true
 [dependencies]
 todo-or-die-core={path="../todo-or-die-core"}
