@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   cross-build:
     name: ${{ matrix.target }}
@@ -22,8 +25,6 @@ jobs:
             archive: todo-or-die-linux-arm64.tar.gz
           - target: x86_64-pc-windows-gnu
             archive: todo-or-die-windows-amd64.zip
-          - target: aarch64-pc-windows-gnu
-            archive: todo-or-die-windows-arm64.zip
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1
@@ -41,9 +42,6 @@ jobs:
         run: tar -C target/${{ matrix.target }}/release -czf ${{ matrix.archive }} todo-or-die
       - name: Package Windows binary
         if: runner.os == 'Linux' && startsWith(matrix.target, 'x86_64-pc-windows')
-        run: 7z a ${{ matrix.archive }} ./target/${{ matrix.target }}/release/todo-or-die.exe
-      - name: Package Windows ARM64 binary
-        if: runner.os == 'Linux' && startsWith(matrix.target, 'aarch64-pc-windows')
         run: 7z a ${{ matrix.archive }} ./target/${{ matrix.target }}/release/todo-or-die.exe
       - uses: actions/upload-artifact@v4
         with:
