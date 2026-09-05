@@ -21,6 +21,7 @@ pub async fn resolve(
     api_url: &str,
     token: Option<&str>,
 ) -> Result<IssueFact, ProviderError> {
+    crate::install_tls_provider();
     let url = format!(
         "{}/rest/api/3/issue/{}",
         api_url.trim_end_matches('/'),

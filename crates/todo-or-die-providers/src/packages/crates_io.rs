@@ -12,6 +12,7 @@ struct CrateData {
 }
 
 pub async fn resolve(client: &Client, package: &str) -> Result<PackageFact, ProviderError> {
+    crate::install_tls_provider();
     let response = client
         .get(format!("https://crates.io/api/v1/crates/{package}"))
         .header("user-agent", "todo-or-die")

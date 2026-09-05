@@ -12,6 +12,7 @@ urlencoding.workspace = true
 serde_json.workspace = true
 semver.workspace = true
 tokio.workspace = true
+rustls.workspace = true
 
 [dev-dependencies]
 wiremock = "0.6"
