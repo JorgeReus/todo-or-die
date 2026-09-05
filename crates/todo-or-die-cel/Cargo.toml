@@ -1,0 +1,8 @@
+[package]
+name = "todo-or-die-cel"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cel-interpreter.workspace = true
+serde_json.workspace = true

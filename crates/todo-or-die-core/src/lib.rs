@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use thiserror::Error;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceSpan {
     pub start_byte: usize,
     pub end_byte: usize,
@@ -20,17 +20,53 @@ pub struct SourceComment {
     pub span: SourceSpan,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Condition {
-    After { date: NaiveDate },
-    Cel { source: String },
+    After {
+        date: NaiveDate,
+    },
+    Cel {
+        source: String,
+    },
+    Issue {
+        provider: IssueProvider,
+        repository: String,
+        number: u64,
+        state: IssueState,
+    },
+    Package {
+        ecosystem: PackageEcosystem,
+        package: String,
+        requirement: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IssueProvider {
+    Github,
+    Gitlab,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IssueState {
+    Open,
+    Closed,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PackageEcosystem {
+    Npm,
+    Crates,
 }
 
 #[derive(Debug, Clone)]
 pub struct Todo {
     pub file: PathBuf,
     pub span: SourceSpan,
+    pub source: String,
     pub condition: Condition,
     pub message: Option<String>,
 }
@@ -57,12 +93,20 @@ pub fn parse_directive(
     };
     let rest = rest.trim();
     let (condition, message) = if let Some(value) = rest.strip_prefix("after ") {
+        let (date, message) = value.split_once(char::is_whitespace).unwrap_or((value, ""));
         (
             Condition::After {
-                date: NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d")?,
+                date: NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d")?,
             },
-            None,
+            (!message.trim().is_empty())
+                .then(|| message.trim().trim_start_matches('*').trim().to_owned()),
         )
+    } else if let Some(value) = rest.strip_prefix("github ") {
+        issue(value, IssueProvider::Github)?
+    } else if let Some(value) = rest.strip_prefix("gitlab ") {
+        issue(value, IssueProvider::Gitlab)?
+    } else if let Some(value) = rest.strip_prefix("package ") {
+        package(value)?
     } else if rest.starts_with("cel(") && rest.ends_with(')') {
         (
             Condition::Cel {
@@ -74,6 +118,57 @@ pub fn parse_directive(
         return Err(DirectiveError::Invalid(rest.to_owned()));
     };
     Ok(Some((condition, message)))
+}
+
+fn package(value: &str) -> Result<(Condition, Option<String>), DirectiveError> {
+    let (target, requirement) = value
+        .rsplit_once(' ')
+        .ok_or_else(|| DirectiveError::Invalid(value.into()))?;
+    let (ecosystem, package) = target
+        .split_once('/')
+        .ok_or_else(|| DirectiveError::Invalid(value.into()))?;
+    let ecosystem = match ecosystem {
+        "npm" => PackageEcosystem::Npm,
+        "crates" => PackageEcosystem::Crates,
+        _ => return Err(DirectiveError::Invalid(value.into())),
+    };
+    Ok((
+        Condition::Package {
+            ecosystem,
+            package: package.into(),
+            requirement: requirement.into(),
+        },
+        None,
+    ))
+}
+
+fn issue(
+    value: &str,
+    provider: IssueProvider,
+) -> Result<(Condition, Option<String>), DirectiveError> {
+    let (target, expected) = value
+        .rsplit_once(' ')
+        .ok_or_else(|| DirectiveError::Invalid(value.into()))?;
+    let (repository, number) = target
+        .rsplit_once('#')
+        .ok_or_else(|| DirectiveError::Invalid(value.into()))?;
+    let number = number
+        .parse()
+        .map_err(|_| DirectiveError::Invalid(value.into()))?;
+    let state = match expected {
+        "open" => IssueState::Open,
+        "closed" => IssueState::Closed,
+        _ => return Err(DirectiveError::Invalid(value.into())),
+    };
+    Ok((
+        Condition::Issue {
+            provider,
+            repository: repository.into(),
+            number,
+            state,
+        },
+        None,
+    ))
 }
 
 pub fn state(condition: &Condition, today: NaiveDate) -> TodoState {
@@ -109,5 +204,46 @@ mod tests {
             state(&condition, NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
             TodoState::Triggered
         );
+    }
+
+    #[test]
+    fn extracts_inline_message() {
+        let comment = SourceComment {
+            raw_text: String::new(),
+            content: "TODO-OR-DIE: after 2020-01-01 remove this".into(),
+            span: SourceSpan {
+                start_byte: 0,
+                end_byte: 0,
+                start_line: 0,
+                start_column: 0,
+                end_line: 0,
+                end_column: 0,
+            },
+        };
+        let (_, message) = parse_directive(&comment).unwrap().unwrap();
+        assert_eq!(message.as_deref(), Some("remove this"));
+    }
+
+    #[test]
+    fn parses_package_condition() {
+        let comment = SourceComment {
+            raw_text: String::new(),
+            content: "TODO-OR-DIE: package npm/react >= 20".into(),
+            span: SourceSpan {
+                start_byte: 0,
+                end_byte: 0,
+                start_line: 0,
+                start_column: 0,
+                end_line: 0,
+                end_column: 0,
+            },
+        };
+        assert!(matches!(
+            parse_directive(&comment).unwrap().unwrap().0,
+            Condition::Package {
+                ecosystem: PackageEcosystem::Npm,
+                ..
+            }
+        ));
     }
 }

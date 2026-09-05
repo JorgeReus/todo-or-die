@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/todo-or-die-core", "crates/todo-or-die-tree-sitter", "crates/todo-or-die-cli"]
+members = ["crates/todo-or-die-core", "crates/todo-or-die-tree-sitter", "crates/todo-or-die-cel", "crates/todo-or-die-providers", "crates/todo-or-die-cli"]
 resolver = "2"
 
 [workspace.package]
@@ -20,6 +20,13 @@ tree-sitter-python = "0.25"
 tree-sitter-go = "0.25"
 tree-sitter-java = "0.23"
 tree-sitter-kotlin = "0.3"
+tree-sitter-zig = "1.1"
 tree-sitter-legacy = { package = "tree-sitter", version = "0.20" }
+cel-interpreter = { version = "0.10", features = ["json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+toml = "0.8"
+semver = "1"
+urlencoding = "2"
 ignore = "0.4"
 clap = { version = "4", features = ["derive"] }

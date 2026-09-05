@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 #[test]
 fn extracts_directives_from_real_comments_in_each_supported_language() {
-    for extension in ["rs", "ts", "js", "py", "go", "java", "kt"] {
+    for extension in ["rs", "ts", "js", "py", "go", "java", "kt", "zig"] {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures")
             .join(format!("comment.{extension}"));
