@@ -45,6 +45,8 @@ pub enum ProviderError {
     InvalidVersion(String),
     #[error("provider API URL is not configured")]
     MissingApiUrl,
+    #[error("provider configuration error: {0}")]
+    Configuration(String),
 }
 
 #[derive(Debug, Clone)]

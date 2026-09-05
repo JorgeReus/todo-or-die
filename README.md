@@ -77,7 +77,45 @@ todo-or-die check .
 
 Exit codes are `0` for no expired TODOs, `1` when TODOs have expired, and `2` for malformed directives or other errors.
 
-Issue conditions use `GITHUB_TOKEN` or `GITLAB_TOKEN` when authentication is needed. For private installations, set `GITHUB_API_URL` or `GITLAB_API_URL` to the provider API base URL.
+## Provider conditions
+
+GitHub and GitLab issues use `repository#number` identifiers:
+
+```rust
+// TODO-OR-DIE: github org/repo#123 closed
+// TODO-OR-DIE: gitlab group/project#42 open
+```
+
+Jira uses an issue key and treats `done`, `closed`, and `resolved` as closed:
+
+```java
+// TODO-OR-DIE: jira PROJ-123 done
+```
+
+Release conditions are available through CEL:
+
+```rust
+// TODO-OR-DIE: cel(github.releases["org/repo"].latest().major >= 2)
+// TODO-OR-DIE: cel(gitlab.releases["group/project"].latest().major >= 3)
+```
+
+CEL can combine facts from several providers in one expiration rule:
+
+```rust
+// TODO-OR-DIE: cel(
+//   github.issues["org/repo#123"].closed &&
+//   jira.issues["PROJ-456"].closed &&
+//   github.releases["org/repo"].latest().major >= 2
+// )
+```
+
+Provider facts are resolved before CEL runs. CEL only evaluates the facts
+provided by todo-or-die; it cannot make additional shell, filesystem, or
+network calls.
+
+Provider-backed conditions require the provider API URL in `.todo-or-die.toml`.
+Tokens are read from `GITHUB_TOKEN`, `GITLAB_TOKEN`, and `JIRA_TOKEN`. Environment
+variables `GITHUB_API_URL`, `GITLAB_API_URL`, and `JIRA_API_URL` override the file.
 
 Package conditions currently support npm and crates.io:
 
@@ -86,7 +124,23 @@ Package conditions currently support npm and crates.io:
 // TODO-OR-DIE: package crates/serde >= 2
 ```
 
-Optional `.todo-or-die.toml` settings:
+These conditions trigger when the registry’s current version satisfies the
+requirement:
+
+```typescript
+// TODO-OR-DIE: package npm/typescript >= 5.0.0
+// Remove the temporary compiler workaround after TypeScript 5.
+```
+
+```rust
+// TODO-OR-DIE: package crates/reqwest >= 0.13
+// Remove the compatibility adapter after the dependency upgrade.
+```
+
+Package conditions use the public npm and crates.io registries. They are
+currently evaluated by the native package syntax, not through CEL.
+
+`.todo-or-die.toml` settings:
 
 ```toml
 [network]

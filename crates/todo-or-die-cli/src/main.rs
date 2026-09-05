@@ -265,7 +265,7 @@ async fn main() -> ExitCode {
                             .await
                         }
                         Err(error) => {
-                            Err(todo_or_die_providers::ProviderError::InvalidVersion(error))
+                            Err(todo_or_die_providers::ProviderError::Configuration(error))
                         }
                     };
                     match fact {
