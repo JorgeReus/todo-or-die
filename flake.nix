@@ -20,7 +20,7 @@
       };
     in {
       devShells.${system}.default = pkgs.mkShell {
-        packages = [ rust pkgs.tree-sitter ];
+        packages = [ rust ];
       };
     };
 }

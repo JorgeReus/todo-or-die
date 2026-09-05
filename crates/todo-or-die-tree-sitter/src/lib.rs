@@ -1,41 +1,61 @@
 use todo_or_die_core::{SourceComment, SourceSpan};
-use tree_sitter::{Node, Parser};
-#[derive(Clone, Copy)]
-enum CommentSyntax {
-    Slash,
-    Hash,
+
+#[derive(Clone, Copy, PartialEq)]
+enum CommentProfile {
+    CLike,
+    PythonLike,
 }
 
-fn language(p: &std::path::Path) -> Option<(tree_sitter::Language, CommentSyntax)> {
-    match p.extension()?.to_str()? {
-        "rs" => Some((tree_sitter_rust::LANGUAGE.into(), CommentSyntax::Slash)),
-        "ts" | "tsx" => Some((
-            tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-            CommentSyntax::Slash,
-        )),
-        "js" | "jsx" => Some((
-            tree_sitter_javascript::LANGUAGE.into(),
-            CommentSyntax::Slash,
-        )),
-        "py" => Some((tree_sitter_python::LANGUAGE.into(), CommentSyntax::Hash)),
-        "go" => Some((tree_sitter_go::LANGUAGE.into(), CommentSyntax::Slash)),
-        "java" => Some((tree_sitter_java::LANGUAGE.into(), CommentSyntax::Slash)),
-        "zig" => Some((tree_sitter_zig::LANGUAGE.into(), CommentSyntax::Slash)),
+#[derive(Clone, Copy)]
+enum CommentKind {
+    Line,
+    Block,
+}
+
+fn syntax(path: &std::path::Path) -> Option<CommentProfile> {
+    match path.extension()?.to_str()? {
+        "py" => Some(CommentProfile::PythonLike),
+        "rs" | "ts" | "tsx" | "js" | "jsx" | "go" | "java" | "kt" | "kts" | "zig" => {
+            Some(CommentProfile::CLike)
+        }
         _ => None,
     }
 }
-fn normalize(raw: &str, syntax: CommentSyntax) -> String {
-    let line_prefix = match syntax {
-        CommentSyntax::Slash => "//",
-        CommentSyntax::Hash => "#",
+
+fn span(source: &str, start: usize, end: usize) -> SourceSpan {
+    let before = &source[..start];
+    let text = &source[start..end];
+    let line = before.bytes().filter(|b| *b == b'\n').count();
+    let column = before.rsplit('\n').next().unwrap_or("").chars().count();
+    let end_line = line + text.bytes().filter(|b| *b == b'\n').count();
+    let end_column = if text.contains('\n') {
+        text.rsplit('\n').next().unwrap_or("").chars().count()
+    } else {
+        column + text.chars().count()
     };
-    raw.trim()
-        .trim_start_matches("/*")
-        .trim_end_matches("*/")
-        .lines()
+    SourceSpan {
+        start_byte: start,
+        end_byte: end,
+        start_line: line,
+        start_column: column,
+        end_line,
+        end_column,
+    }
+}
+
+fn normalize(raw: &str, profile: CommentProfile, kind: CommentKind) -> String {
+    let prefix = match profile {
+        CommentProfile::CLike => "//",
+        CommentProfile::PythonLike => "#",
+    };
+    let body = match kind {
+        CommentKind::Line => raw.trim().trim_start_matches(prefix),
+        CommentKind::Block => raw.trim().trim_start_matches("/*").trim_end_matches("*/"),
+    };
+    body.lines()
         .map(|line| {
             line.trim()
-                .trim_start_matches(line_prefix)
+                .trim_start_matches(prefix)
                 .trim_start_matches('*')
                 .trim()
         })
@@ -45,83 +65,114 @@ fn normalize(raw: &str, syntax: CommentSyntax) -> String {
         .to_owned()
 }
 
-fn make_comment(
-    raw: String,
-    start_byte: usize,
-    end_byte: usize,
-    start: (usize, usize),
-    end: (usize, usize),
-    syntax: CommentSyntax,
-) -> SourceComment {
-    SourceComment {
-        raw_text: raw.clone(),
-        content: normalize(&raw, syntax),
-        span: SourceSpan {
-            start_byte,
-            end_byte,
-            start_line: start.0,
-            start_column: start.1,
-            end_line: end.0,
-            end_column: end.1,
-        },
-    }
-}
-
-fn walk(n: Node, s: &[u8], syntax: CommentSyntax, o: &mut Vec<SourceComment>) {
-    if n.kind() == "comment" || n.kind().ends_with("_comment") {
-        let raw = String::from_utf8_lossy(&s[n.byte_range()]).into_owned();
-        let a = n.start_position();
-        let b = n.end_position();
-        o.push(make_comment(
-            raw,
-            n.start_byte(),
-            n.end_byte(),
-            (a.row, a.column),
-            (b.row, b.column),
-            syntax,
-        ));
-    }
-    let mut c = n.walk();
-    for x in n.children(&mut c) {
-        walk(x, s, syntax, o)
-    }
-}
-fn walk_legacy(n: tree_sitter_legacy::Node, s: &[u8], o: &mut Vec<SourceComment>) {
-    if n.kind() == "comment" || n.kind().ends_with("_comment") {
-        let raw = String::from_utf8_lossy(&s[n.byte_range()]).into_owned();
-        let a = n.start_position();
-        let b = n.end_position();
-        o.push(make_comment(
-            raw,
-            n.start_byte(),
-            n.end_byte(),
-            (a.row, a.column),
-            (b.row, b.column),
-            CommentSyntax::Slash,
-        ));
-    }
-    let mut c = n.walk();
-    for x in n.children(&mut c) {
-        walk_legacy(x, s, o);
-    }
-}
-pub fn extract_comments(p: &std::path::Path, s: &str) -> Result<Vec<SourceComment>, String> {
-    if matches!(p.extension().and_then(|e| e.to_str()), Some("kt" | "kts")) {
-        let mut q = tree_sitter_legacy::Parser::new();
-        q.set_language(tree_sitter_kotlin::language())
-            .map_err(|e| e.to_string())?;
-        let t = q.parse(s, None).ok_or("failed to parse source")?;
-        let mut o = vec![];
-        walk_legacy(t.root_node(), s.as_bytes(), &mut o);
-        return Ok(o);
-    }
-    let Some((l, syntax)) = language(p) else {
+pub fn extract_comments(
+    path: &std::path::Path,
+    source: &str,
+) -> Result<Vec<SourceComment>, String> {
+    let Some(syntax) = syntax(path) else {
         return Ok(vec![]);
     };
-    let mut q = Parser::new();
-    q.set_language(&l).map_err(|e| e.to_string())?;
-    let t = q.parse(s, None).ok_or("failed to parse source")?;
-    let mut o = vec![];
-    walk(t.root_node(), s.as_bytes(), syntax, &mut o);
-    Ok(o)
+    let bytes = source.as_bytes();
+    let mut comments = vec![];
+    let mut i = 0;
+    let mut line_start = true;
+    while i < bytes.len() {
+        if matches!(syntax, CommentProfile::CLike)
+            && i + 1 < bytes.len()
+            && bytes[i..i + 2] == *b"\\\\"
+        {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if syntax == CommentProfile::CLike
+            && i + 1 < bytes.len()
+            && bytes[i] == b'/'
+            && bytes[i + 1] == b'/'
+        {
+            let start = i;
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            let raw = source[start..i].to_owned();
+            comments.push(SourceComment {
+                content: normalize(&raw, syntax, CommentKind::Line),
+                raw_text: raw,
+                span: span(source, start, i),
+            });
+            line_start = false;
+            continue;
+        }
+        if syntax == CommentProfile::CLike
+            && i + 1 < bytes.len()
+            && bytes[i] == b'/'
+            && bytes[i + 1] == b'*'
+        {
+            let start = i;
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+            let raw = source[start..i].to_owned();
+            comments.push(SourceComment {
+                content: normalize(&raw, syntax, CommentKind::Block),
+                raw_text: raw,
+                span: span(source, start, i),
+            });
+            line_start = false;
+            continue;
+        }
+        if syntax == CommentProfile::PythonLike && bytes[i] == b'#' {
+            let start = i;
+            i += 1;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            let raw = source[start..i].to_owned();
+            comments.push(SourceComment {
+                content: normalize(&raw, syntax, CommentKind::Line),
+                raw_text: raw,
+                span: span(source, start, i),
+            });
+            line_start = false;
+            continue;
+        }
+        if bytes[i] == b'"'
+            || bytes[i] == b'\''
+            || (bytes[i] == b'`' && matches!(syntax, CommentProfile::CLike))
+        {
+            let quote = bytes[i];
+            let triple = i + 2 < bytes.len() && bytes[i..i + 3] == [quote, quote, quote];
+            i += if triple { 3 } else { 1 };
+            while i < bytes.len() {
+                if bytes[i] == b'\\' {
+                    i += 2;
+                    continue;
+                }
+                if triple && i + 2 < bytes.len() && bytes[i..i + 3] == [quote, quote, quote] {
+                    i += 3;
+                    break;
+                }
+                if !triple && bytes[i] == quote {
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            line_start = false;
+            continue;
+        }
+        if bytes[i] == b'\n' {
+            line_start = true;
+        } else if !bytes[i].is_ascii_whitespace() {
+            line_start = false;
+        }
+        i += 1;
+    }
+    let _ = line_start;
+    Ok(comments)
 }
