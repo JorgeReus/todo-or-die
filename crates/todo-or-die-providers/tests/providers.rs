@@ -7,6 +7,7 @@ use wiremock::{
 
 #[tokio::test]
 async fn resolves_github_issue_and_release_from_mock_server() {
+    todo_or_die_providers::install_tls_provider();
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/repos/org/repo/issues/7"))
@@ -45,6 +46,7 @@ async fn resolves_github_issue_and_release_from_mock_server() {
 
 #[tokio::test]
 async fn resolves_jira_issue_from_mock_server() {
+    todo_or_die_providers::install_tls_provider();
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/rest/api/3/issue/PROJ-123"))

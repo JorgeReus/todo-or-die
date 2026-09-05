@@ -9,7 +9,6 @@ struct Response {
 }
 
 pub async fn resolve(client: &Client, package: &str) -> Result<PackageFact, ProviderError> {
-    crate::install_tls_provider();
     let response = client
         .get(format!("https://registry.npmjs.org/{package}"))
         .header("user-agent", "todo-or-die")
