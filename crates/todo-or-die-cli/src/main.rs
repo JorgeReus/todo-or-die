@@ -1,7 +1,17 @@
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
-use std::{fs, path::PathBuf, process::ExitCode, time::Duration};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    process::ExitCode,
+    time::Duration,
+};
 use todo_or_die_core::*;
+
+fn return_state(fact: &todo_or_die_providers::IssueFact, expected: &IssueState) -> bool {
+    std::mem::discriminant(&fact.state) == std::mem::discriminant(expected)
+}
 #[derive(Parser)]
 struct Cli {
     #[command(subcommand)]
@@ -13,6 +23,7 @@ struct Cli {
 enum Command {
     Check { paths: Vec<PathBuf> },
     List { paths: Vec<PathBuf> },
+    Explain { location: String },
 }
 fn files(ps: &[PathBuf]) -> Vec<PathBuf> {
     let mut o = vec![];
@@ -34,6 +45,7 @@ struct Settings {
     network: Network,
     github: Host,
     gitlab: Host,
+    jira: Host,
 }
 #[derive(Deserialize)]
 struct Network {
@@ -72,6 +84,13 @@ async fn main() -> ExitCode {
     let c = Cli::parse();
     let ps = match &c.command {
         Command::Check { paths: p } | Command::List { paths: p } if !p.is_empty() => p,
+        Command::Explain { location } => {
+            let file = location
+                .rsplit_once(':')
+                .map(|(file, _)| file)
+                .unwrap_or(location);
+            &vec![PathBuf::from(file)]
+        }
         _ => &vec![PathBuf::from(".")],
     };
     let mut ts = vec![];
@@ -120,6 +139,35 @@ async fn main() -> ExitCode {
             }
         }
     }
+    if let Command::Explain { location } = &c.command {
+        let Some((file, line)) = location.rsplit_once(':') else {
+            eprintln!("explain location must be file:line");
+            return ExitCode::from(2);
+        };
+        let Ok(line) = line.parse::<usize>() else {
+            eprintln!("explain line must be a number");
+            return ExitCode::from(2);
+        };
+        if let Some(todo) = ts
+            .iter()
+            .find(|todo| todo.file == Path::new(file) && todo.span.start_line + 1 == line)
+        {
+            println!(
+                "{}:{}:{}: {:?}",
+                todo.file.display(),
+                line,
+                todo.span.start_column + 1,
+                todo.condition
+            );
+            println!("  {}", todo.source);
+            if let Some(message) = &todo.message {
+                println!("  {message}");
+            }
+            return ExitCode::SUCCESS;
+        }
+        eprintln!("no TODO found at {location}");
+        return ExitCode::from(2);
+    }
     let settings = match settings(ps) {
         Ok(value) => value,
         Err(error) => {
@@ -138,12 +186,13 @@ async fn main() -> ExitCode {
         }
     };
     let mut ex: Vec<Todo> = vec![];
+    let mut issue_cache: HashMap<String, todo_or_die_providers::IssueFact> = HashMap::new();
+    let mut release_cache: HashMap<String, todo_or_die_providers::ReleaseFact> = HashMap::new();
     for t in &ts {
         let triggered = match &t.condition {
             Condition::Issue {
                 provider,
-                repository,
-                number,
+                id: IssueId::RepositoryNumber { repository, number },
                 state: expected,
             } => {
                 let token = std::env::var(if matches!(provider, IssueProvider::Github) {
@@ -165,22 +214,70 @@ async fn main() -> ExitCode {
                         settings.gitlab.api_url.clone()
                     }
                 });
-                match todo_or_die_providers::resolve_issue(
-                    &client,
-                    provider,
-                    repository,
-                    *number,
-                    host.as_deref(),
-                    token.as_deref(),
-                )
-                .await
-                {
-                    Ok(fact) => {
-                        std::mem::discriminant(&fact.state) == std::mem::discriminant(expected)
+                let cache_key = format!("{provider:?}:{repository}#{number}");
+                if let Some(fact) = issue_cache.get(&cache_key) {
+                    return_state(fact, expected)
+                } else {
+                    match todo_or_die_providers::issues::resolve(
+                        &client,
+                        provider,
+                        repository,
+                        *number,
+                        host.as_deref(),
+                        token.as_deref(),
+                    )
+                    .await
+                    {
+                        Ok(fact) => {
+                            let result = return_state(&fact, expected);
+                            issue_cache.insert(cache_key, fact);
+                            result
+                        }
+                        Err(e) => {
+                            eprintln!("{}: {}", t.file.display(), e);
+                            return ExitCode::from(2);
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("{}: {}", t.file.display(), e);
-                        return ExitCode::from(2);
+                }
+            }
+            Condition::Issue {
+                provider: IssueProvider::Jira,
+                id: IssueId::Key(key),
+                state: expected,
+            } => {
+                let cache_key = format!("jira:{key}");
+                if let Some(fact) = issue_cache.get(&cache_key) {
+                    return_state(fact, expected)
+                } else {
+                    let host = std::env::var("JIRA_API_URL")
+                        .ok()
+                        .or_else(|| settings.jira.api_url.clone())
+                        .ok_or_else(|| "Jira API URL is not configured".to_owned());
+                    let token = std::env::var("JIRA_TOKEN").ok();
+                    let fact = match host {
+                        Ok(host) => {
+                            todo_or_die_providers::issues::jira::resolve(
+                                &client,
+                                key,
+                                &host,
+                                token.as_deref(),
+                            )
+                            .await
+                        }
+                        Err(error) => {
+                            Err(todo_or_die_providers::ProviderError::InvalidVersion(error))
+                        }
+                    };
+                    match fact {
+                        Ok(fact) => {
+                            let result = return_state(&fact, expected);
+                            issue_cache.insert(cache_key, fact);
+                            result
+                        }
+                        Err(error) => {
+                            eprintln!("{}: {}", t.file.display(), error);
+                            return ExitCode::from(2);
+                        }
                     }
                 }
             }
@@ -190,6 +287,11 @@ async fn main() -> ExitCode {
                 for (provider, repository, number) in
                     todo_or_die_providers::cel_issue_references(source)
                 {
+                    let cache_key = format!("{provider:?}:{repository}#{number}");
+                    if let Some(fact) = issue_cache.get(&cache_key) {
+                        facts.push(fact.clone());
+                        continue;
+                    }
                     let token = std::env::var(if matches!(provider, IssueProvider::Github) {
                         "GITHUB_TOKEN"
                     } else {
@@ -209,7 +311,7 @@ async fn main() -> ExitCode {
                             settings.gitlab.api_url.clone()
                         }
                     });
-                    match todo_or_die_providers::resolve_issue(
+                    match todo_or_die_providers::issues::resolve(
                         &client,
                         &provider,
                         &repository,
@@ -219,15 +321,57 @@ async fn main() -> ExitCode {
                     )
                     .await
                     {
-                        Ok(fact) => facts.push(fact),
+                        Ok(fact) => {
+                            issue_cache.insert(cache_key, fact.clone());
+                            facts.push(fact)
+                        }
                         Err(e) => {
                             eprintln!("{}: {}", t.file.display(), e);
                             return ExitCode::from(2);
                         }
                     }
                 }
+                for key in todo_or_die_providers::cel_jira_references(source) {
+                    let cache_key = format!("jira:{key}");
+                    if let Some(fact) = issue_cache.get(&cache_key) {
+                        facts.push(fact.clone());
+                        continue;
+                    }
+                    let host = std::env::var("JIRA_API_URL")
+                        .ok()
+                        .or_else(|| settings.jira.api_url.clone());
+                    let token = std::env::var("JIRA_TOKEN").ok();
+                    match host {
+                        Some(host) => match todo_or_die_providers::issues::jira::resolve(
+                            &client,
+                            &key,
+                            &host,
+                            token.as_deref(),
+                        )
+                        .await
+                        {
+                            Ok(fact) => {
+                                issue_cache.insert(cache_key, fact.clone());
+                                facts.push(fact)
+                            }
+                            Err(error) => {
+                                eprintln!("{}: {}", t.file.display(), error);
+                                return ExitCode::from(2);
+                            }
+                        },
+                        None => {
+                            eprintln!("{}: Jira API URL is not configured", t.file.display());
+                            return ExitCode::from(2);
+                        }
+                    }
+                }
                 for (provider, repository) in todo_or_die_providers::cel_release_references(source)
                 {
+                    let cache_key = format!("{provider:?}:{repository}");
+                    if let Some(fact) = release_cache.get(&cache_key) {
+                        releases.push(fact.clone());
+                        continue;
+                    }
                     let token = std::env::var(if matches!(provider, IssueProvider::Github) {
                         "GITHUB_TOKEN"
                     } else {
@@ -240,7 +384,7 @@ async fn main() -> ExitCode {
                         "GITLAB_API_URL"
                     })
                     .ok();
-                    match todo_or_die_providers::resolve_latest_release(
+                    match todo_or_die_providers::releases::resolve(
                         &client,
                         &provider,
                         &repository,
@@ -249,7 +393,10 @@ async fn main() -> ExitCode {
                     )
                     .await
                     {
-                        Ok(fact) => releases.push(fact),
+                        Ok(fact) => {
+                            release_cache.insert(cache_key, fact.clone());
+                            releases.push(fact)
+                        }
                         Err(e) => {
                             eprintln!("{}: {}", t.file.display(), e);
                             return ExitCode::from(2);
@@ -272,15 +419,16 @@ async fn main() -> ExitCode {
                 package,
                 requirement,
             } => {
-                let fact = match todo_or_die_providers::resolve_package(&client, ecosystem, package)
-                    .await
-                {
-                    Ok(fact) => fact,
-                    Err(e) => {
-                        eprintln!("{}: {}", t.file.display(), e);
-                        return ExitCode::from(2);
-                    }
-                };
+                let fact =
+                    match todo_or_die_providers::packages::resolve(&client, ecosystem, package)
+                        .await
+                    {
+                        Ok(fact) => fact,
+                        Err(e) => {
+                            eprintln!("{}: {}", t.file.display(), e);
+                            return ExitCode::from(2);
+                        }
+                    };
                 match (
                     semver::Version::parse(&fact.version),
                     semver::VersionReq::parse(requirement),
@@ -307,9 +455,14 @@ async fn main() -> ExitCode {
         &ex
     };
     if c.format == "json" {
+        let field = if matches!(c.command, Command::List { .. }) {
+            "todos"
+        } else {
+            "expired"
+        };
         println!(
             "{}",
-            serde_json::json!({"version":1,"expired":output.iter().map(|t|serde_json::json!({"file":t.file,"line":t.span.start_line+1,"column":t.span.start_column+1,"condition":t.condition,"message":t.message})).collect::<Vec<_>>() })
+            serde_json::json!({"version":1,field:output.iter().map(|t|serde_json::json!({"file":t.file,"line":t.span.start_line+1,"column":t.span.start_column+1,"condition":t.condition,"message":t.message})).collect::<Vec<_>>() })
         );
     } else {
         for t in output {

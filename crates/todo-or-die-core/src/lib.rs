@@ -31,8 +31,7 @@ pub enum Condition {
     },
     Issue {
         provider: IssueProvider,
-        repository: String,
-        number: u64,
+        id: IssueId,
         state: IssueState,
     },
     Package {
@@ -43,10 +42,18 @@ pub enum Condition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum IssueId {
+    RepositoryNumber { repository: String, number: u64 },
+    Key(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum IssueProvider {
     Github,
     Gitlab,
+    Jira,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -105,6 +112,8 @@ pub fn parse_directive(
         issue(value, IssueProvider::Github)?
     } else if let Some(value) = rest.strip_prefix("gitlab ") {
         issue(value, IssueProvider::Gitlab)?
+    } else if let Some(value) = rest.strip_prefix("jira ") {
+        jira_issue(value)?
     } else if let Some(value) = rest.strip_prefix("package ") {
         package(value)?
     } else if rest.starts_with("cel(") && rest.ends_with(')') {
@@ -163,8 +172,32 @@ fn issue(
     Ok((
         Condition::Issue {
             provider,
-            repository: repository.into(),
-            number,
+            id: IssueId::RepositoryNumber {
+                repository: repository.into(),
+                number,
+            },
+            state,
+        },
+        None,
+    ))
+}
+
+fn jira_issue(value: &str) -> Result<(Condition, Option<String>), DirectiveError> {
+    let (key, expected) = value
+        .rsplit_once(' ')
+        .ok_or_else(|| DirectiveError::Invalid(value.into()))?;
+    if !key.contains('-') || key.is_empty() {
+        return Err(DirectiveError::Invalid(value.into()));
+    }
+    let state = match expected {
+        "open" => IssueState::Open,
+        "closed" | "done" => IssueState::Closed,
+        _ => return Err(DirectiveError::Invalid(value.into())),
+    };
+    Ok((
+        Condition::Issue {
+            provider: IssueProvider::Jira,
+            id: IssueId::Key(key.into()),
             state,
         },
         None,

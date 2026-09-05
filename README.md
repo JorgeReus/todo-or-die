@@ -64,6 +64,7 @@ Without installing the binary yet:
 cargo run -p todo-or-die-cli -- check .
 cargo run -p todo-or-die-cli -- check src/main.rs
 cargo run -p todo-or-die-cli -- list .
+cargo run -p todo-or-die-cli -- explain src/main.rs:42
 cargo run -p todo-or-die-cli -- check . --format json
 ```
 
@@ -96,6 +97,9 @@ api_url = "https://github.example.com/api/v3"
 
 [gitlab]
 api_url = "https://gitlab.example.com/api/v4"
+
+[jira]
+api_url = "https://jira.example.com"
 ```
 
 ## Development environment
@@ -123,7 +127,6 @@ The current MVP does not yet include:
 
 - SARIF output
 - Automatic TODO removal or fixing
-- `explain` command
 - IDE plugins, GitHub Actions, or other integrations
 
 Package-version conditions can build on the existing provider and CEL fact layers.
