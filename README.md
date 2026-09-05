@@ -32,6 +32,8 @@ Before the date, the TODO is active. On or after the date, `check` reports it as
 | Go | `.go` | `//`, `/* ... */` |
 | Java | `.java` | `//`, `/* ... */` |
 | Kotlin | `.kt`, `.kts` | `//`, `/* ... */` |
+| HTML | `.html`, `.htm` | `<!-- ... -->` |
+| Svelte | `.svelte` | `<!-- ... -->`, `//`, `/* ... */` in scripts |
 
 The lexer understands strings and comments, so this does not create a TODO:
 
