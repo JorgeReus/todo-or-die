@@ -1,7 +1,33 @@
 use reqwest::Client;
 use serde::Deserialize;
+use std::{future::Future, pin::Pin};
 use thiserror::Error;
 use todo_or_die_core::{IssueProvider, IssueState, PackageEcosystem};
+
+pub type ProviderFuture<'a, T> =
+    Pin<Box<dyn Future<Output = Result<T, ProviderError>> + Send + 'a>>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RepositoryId(pub String);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IssueId(pub String);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PackageId(pub String);
+
+/// Capability interfaces. Implementations can be registered independently per provider.
+pub trait IssueProviderBackend: Send + Sync {
+    fn issue<'a>(&'a self, id: &'a IssueId) -> ProviderFuture<'a, IssueFact>;
+}
+
+pub trait ReleaseProviderBackend: Send + Sync {
+    fn latest_release<'a>(&'a self, repo: &'a RepositoryId) -> ProviderFuture<'a, ReleaseFact>;
+}
+
+pub trait PackageProviderBackend: Send + Sync {
+    fn latest_version<'a>(&'a self, package: &'a PackageId) -> ProviderFuture<'a, PackageFact>;
+}
 
 #[derive(Debug, Error)]
 pub enum ProviderError {

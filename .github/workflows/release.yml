@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   cross-build:
@@ -49,6 +49,10 @@ jobs:
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
+      - name: Upload to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "${{ matrix.archive }}" --clobber
 
   macos-universal:
     name: macOS universal
@@ -79,3 +83,7 @@ jobs:
         with:
           name: todo-or-die-macos-universal.tar.gz
           path: todo-or-die-macos-universal.tar.gz
+      - name: Upload to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" todo-or-die-macos-universal.tar.gz --clobber
