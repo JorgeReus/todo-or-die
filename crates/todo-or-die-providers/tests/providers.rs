@@ -1,5 +1,5 @@
 use reqwest::Client;
-use todo_or_die_core::IssueState;
+use todo_or_die_core::{IssueProvider, IssueState};
 use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
@@ -64,6 +64,7 @@ async fn resolves_jira_issue_from_mock_server() {
     )
     .await
     .unwrap();
+    assert_eq!(issue.provider, IssueProvider::Jira);
     assert_eq!(issue.key.as_deref(), Some("PROJ-123"));
     assert_eq!(issue.state, IssueState::Closed);
 }
