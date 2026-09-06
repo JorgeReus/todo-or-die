@@ -81,6 +81,13 @@ For prebuilt release binaries, use Cargo Binstall:
 cargo binstall todo-or-die
 ```
 
+With Nix, install the pinned prebuilt release without compiling Rust:
+
+```sh
+nix profile install github:JorgeReus/todo-or-die
+nix run github:JorgeReus/todo-or-die -- check .
+```
+
 Exit codes are `0` for no expired TODOs, `1` when TODOs have expired, and `2` for malformed directives or other errors.
 
 ## Provider conditions
