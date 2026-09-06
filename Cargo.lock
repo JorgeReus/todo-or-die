@@ -1491,7 +1491,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "todo-or-die"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "ignore",
@@ -1509,7 +1509,7 @@ dependencies = [
 
 [[package]]
 name = "todo-or-die-cel"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cel-interpreter",
  "serde_json",
@@ -1517,7 +1517,7 @@ dependencies = [
 
 [[package]]
 name = "todo-or-die-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "ignore",
@@ -1535,7 +1535,7 @@ dependencies = [
 
 [[package]]
 name = "todo-or-die-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "serde",
@@ -1544,7 +1544,7 @@ dependencies = [
 
 [[package]]
 name = "todo-or-die-providers"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "reqwest",
  "rustls",
@@ -1560,7 +1560,7 @@ dependencies = [
 
 [[package]]
 name = "todo-or-die-tree-sitter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "todo-or-die-core",
 ]
