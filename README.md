@@ -83,6 +83,17 @@ Once `todo-or-die` is installed, scan the current repository:
 todo-or-die check .
 ```
 
+### GitHub Actions
+
+Use the action from a release tag. It downloads the matching prebuilt binary
+for the runner’s operating system and architecture:
+
+```yaml
+- uses: JorgeReus/todo-or-die@v0.2.1
+  with:
+    path: .
+```
+
 Other useful commands:
 
 ```sh

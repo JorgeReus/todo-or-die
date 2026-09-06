@@ -1,0 +1,65 @@
+name: todo-or-die
+description: Check expiring TODO directives using a prebuilt release binary
+author: Jorge Reus
+
+inputs:
+  version:
+    description: Release version to install, without the leading v
+    required: false
+  path:
+    description: File or directory to check
+    required: false
+    default: .
+  args:
+    description: Additional arguments passed to todo-or-die
+    required: false
+    default: check
+
+runs:
+  using: composite
+  steps:
+    - name: Install todo-or-die
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        version="${INPUT_VERSION:-${GITHUB_ACTION_REF#v}}"
+        if [ -z "$version" ] || [ "$version" = "main" ]; then
+          echo "Set the action to a release tag or provide version explicitly" >&2
+          exit 1
+        fi
+
+        case "${RUNNER_OS}:${RUNNER_ARCH}" in
+          Linux:X64) asset="todo-or-die-x86_64-unknown-linux-gnu.tar.gz" ;;
+          Linux:ARM64) asset="todo-or-die-aarch64-unknown-linux-gnu.tar.gz" ;;
+          macOS:X64) asset="todo-or-die-x86_64-apple-darwin.tar.gz" ;;
+          macOS:ARM64) asset="todo-or-die-aarch64-apple-darwin.tar.gz" ;;
+          Windows:X64) asset="todo-or-die-x86_64-pc-windows-gnu.zip" ;;
+          *) echo "Unsupported runner: ${RUNNER_OS}:${RUNNER_ARCH}" >&2; exit 1 ;;
+        esac
+
+        url="https://github.com/JorgeReus/todo-or-die/releases/download/v${version}/${asset}"
+        tmp="${RUNNER_TEMP}/todo-or-die"
+        mkdir -p "$tmp"
+        if command -v curl >/dev/null 2>&1; then
+          curl --fail --location --silent --show-error "$url" --output "$tmp/$asset"
+        else
+          powershell -NoProfile -Command "Invoke-WebRequest -Uri '$url' -OutFile '$tmp/$asset'"
+        fi
+
+        mkdir -p "$tmp/bin"
+        case "$asset" in
+          *.zip) unzip -q "$tmp/$asset" -d "$tmp/bin" ;;
+          *.tar.gz) tar -xzf "$tmp/$asset" -C "$tmp/bin" ;;
+        esac
+        chmod +x "$tmp/bin/todo-or-die" 2>/dev/null || true
+        echo "$tmp/bin" >> "$GITHUB_PATH"
+
+    - name: Run todo-or-die
+      shell: bash
+      env:
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_PATH: ${{ inputs.path }}
+      run: todo-or-die $INPUT_ARGS "$INPUT_PATH"
