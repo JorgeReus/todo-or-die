@@ -1490,6 +1490,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "todo-or-die"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ignore",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "todo-or-die-cel",
+ "todo-or-die-core",
+ "todo-or-die-providers",
+ "todo-or-die-tree-sitter",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "todo-or-die-cel"
 version = "0.1.0"
 dependencies = [
@@ -1499,7 +1517,7 @@ dependencies = [
 
 [[package]]
 name = "todo-or-die-cli"
-version = "0.1.1"
+version = "0.1.0"
 dependencies = [
  "clap",
  "ignore",
