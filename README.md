@@ -75,6 +75,12 @@ cargo install --path crates/todo-or-die-cli --bin todo-or-die
 todo-or-die check .
 ```
 
+For prebuilt release binaries, use Cargo Binstall:
+
+```sh
+cargo binstall todo-or-die
+```
+
 Exit codes are `0` for no expired TODOs, `1` when TODOs have expired, and `2` for malformed directives or other errors.
 
 ## Provider conditions

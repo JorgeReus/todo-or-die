@@ -20,11 +20,11 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            archive: todo-or-die-linux-amd64.tar.gz
+            archive: todo-or-die-x86_64-unknown-linux-gnu.tar.gz
           - target: aarch64-unknown-linux-gnu
-            archive: todo-or-die-linux-arm64.tar.gz
+            archive: todo-or-die-aarch64-unknown-linux-gnu.tar.gz
           - target: x86_64-pc-windows-gnu
-            archive: todo-or-die-windows-amd64.zip
+            archive: todo-or-die-x86_64-pc-windows-gnu.zip
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1
@@ -76,12 +76,13 @@ jobs:
             target/x86_64-apple-darwin/release/todo-or-die \
             target/aarch64-apple-darwin/release/todo-or-die \
             -output dist/todo-or-die
-          tar -C dist -czf todo-or-die-macos-universal.tar.gz todo-or-die
+            tar -C dist -czf todo-or-die-x86_64-apple-darwin.tar.gz todo-or-die
+            cp todo-or-die-x86_64-apple-darwin.tar.gz todo-or-die-aarch64-apple-darwin.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: todo-or-die-macos-universal.tar.gz
-          path: todo-or-die-macos-universal.tar.gz
+          path: todo-or-die-*-apple-darwin.tar.gz
       - name: Upload to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" todo-or-die-macos-universal.tar.gz --clobber
+        run: gh release upload "$GITHUB_REF_NAME" todo-or-die-*-apple-darwin.tar.gz --clobber

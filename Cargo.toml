@@ -21,6 +21,11 @@ semver.workspace = true
 name = "todo-or-die"
 path = "crates/todo-or-die-cli/src/main.rs"
 
+[package.metadata.binstall]
+pkg-url = "https://github.com/JorgeReus/todo-or-die/releases/download/v{version}/todo-or-die-{target}.{archive-format}"
+bin-dir = "todo-or-die{ binary-ext }"
+pkg-fmt = "auto"
+
 [workspace]
 members = ["crates/todo-or-die-core", "crates/todo-or-die-tree-sitter", "crates/todo-or-die-cel", "crates/todo-or-die-providers", "crates/todo-or-die-cli"]
 resolver = "2"
