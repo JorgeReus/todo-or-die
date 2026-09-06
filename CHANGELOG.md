@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/JorgeReus/todo-or-die/compare/v0.2.0...v0.2.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* changed the release names ([eb86997](https://github.com/JorgeReus/todo-or-die/commit/eb869976ced48ba74d997940b8e9e2631b784f35))
+
 ## [0.2.0](https://github.com/JorgeReus/todo-or-die/compare/v0.1.1...v0.2.0) (2026-09-06)
 
 
